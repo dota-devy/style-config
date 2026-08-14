@@ -7,7 +7,8 @@ A shared Maven package that centralizes Eclipse Java formatting and Checkstyle v
 This package includes:
 - `eclipse-formatter.xml`: Eclipse Java formatter configuration (K&R style, 4-space indentation, parameter descriptions on the same line).
 - `checkstyle.xml`: Checkstyle validation rules (requires braces on end of line, indentation verification, etc.).
-- `pre-commit`: A cross-platform Git pre-commit hook that automatically formats files and validates style before commits are completed.
+- `pre-commit`: Cross-platform dispatcher hook that automatically runs all scripts in the `.githooks/pre-commit.d/` directory.
+- `pre-commit.d/00-style-config`: The core style checker script that runs Spotless formatting and Checkstyle checks.
 
 ## Build and Install Locally
 
@@ -53,7 +54,7 @@ Since the Spotless plugin requires a physical file path on the disk, and Git req
                         <version>1.0.0</version>
                         <type>jar</type>
                         <overWrite>true</overWrite>
-                        <includes>pre-commit</includes>
+                        <includes>pre-commit,pre-commit.d/00-style-config</includes>
                         <outputDirectory>${project.basedir}/.githooks</outputDirectory>
                     </artifactItem>
                 </artifactItems>
@@ -107,15 +108,28 @@ Configure Git to use the `.githooks/` directory and ensure the pre-commit script
             <configuration>
                 <target>
                     <chmod file="${project.basedir}/.githooks/pre-commit" perm="ugo+rx"/>
-                    <!-- For nested projects, use: file="${project.basedir}/../.githooks/pre-commit" -->
+                    <chmod dir="${project.basedir}/.githooks/pre-commit.d" perm="ugo+rx" includes="*"/>
+                    <!-- For nested projects, use: 
+                         file="${project.basedir}/../.githooks/pre-commit" 
+                         dir="${project.basedir}/../.githooks/pre-commit.d" 
+                    -->
                 </target>
             </configuration>
         </execution>
     </executions>
 </plugin>
-```
 
-### 3. Configure Spotless Formatter
+### 3. Adding Project-Specific Hooks
+Because the main hook dispatcher scans `.githooks/pre-commit.d/` dynamically, you can easily add custom hooks specific to your project:
+1. Write a script (e.g., `10-run-tests` or `20-branch-validator`) and save it to `.githooks/pre-commit.d/` in your repository.
+2. In your project's `.gitignore` file, make sure to track the custom hook, but ignore the generated files:
+   ```gitignore
+   .githooks/pre-commit
+   .githooks/pre-commit.d/00-style-config
+   ```
+3. Commit your custom hook script to Git. It will automatically run in sequence after the shared style check!
+
+### 4. Configure Spotless Formatter
 Point Spotless to the extracted configuration file:
 
 ```xml
@@ -137,7 +151,7 @@ Point Spotless to the extracted configuration file:
 </plugin>
 ```
 
-### 4. Configure Checkstyle Validation
+### 5. Configure Checkstyle Validation
 Add this artifact as a dependency to the `maven-checkstyle-plugin` so it can load the `checkstyle.xml` rules directly from the classpath:
 
 ```xml
@@ -170,7 +184,7 @@ Add this artifact as a dependency to the `maven-checkstyle-plugin` so it can loa
 </plugin>
 ```
 
-### 5. Configure IDE (VS Code)
+### 6. Configure IDE (VS Code)
 To make VS Code format code exactly like Spotless, update your project's `.vscode/settings.json`:
 
 ```json

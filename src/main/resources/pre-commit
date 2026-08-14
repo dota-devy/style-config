@@ -1,29 +1,18 @@
 #!/bin/sh
-# Cross-platform pre-commit hook
+# Multi-hook dispatcher
 set -e
 
-# Find all directories containing pom.xml and run spotless/checkstyle
-find . -name "pom.xml" -not -path "*/target/*" -not -path "*/style-config/*" | while read -r pom_path; do
-  PROJECT_DIR=$(dirname "$pom_path")
-  echo "Processing Maven project in $PROJECT_DIR..."
-  
-  if [ -x "$PROJECT_DIR/mvnw" ]; then
-    MVNW="./mvnw"
-  elif [ -x "$PROJECT_DIR/mvnw.cmd" ]; then
-    MVNW="./mvnw.cmd"
-  else
-    MVNW="mvn"
-  fi
-  
-  # Run spotless apply and checkstyle check
-  (
-    cd "$PROJECT_DIR"
-    echo "Running Spotless formatter in $PROJECT_DIR..."
-    "$MVNW" com.diffplug.spotless:spotless-maven-plugin:2.38.0:apply
-    echo "Running Checkstyle in $PROJECT_DIR..."
-    "$MVNW" verify -q
-  )
-done
+HOOK_DIR="$(dirname "$0")/pre-commit.d"
 
-echo "Pre-commit checks passed."
+if [ -d "$HOOK_DIR" ]; then
+  # Run all executable files in alphabetical order
+  for hook in "$HOOK_DIR"/*; do
+    # Skip directories and verify that the hook file exists and is executable
+    if [ -f "$hook" ] && [ -x "$hook" ]; then
+      echo "Executing Git hook: $(basename "$hook")"
+      "$hook" "$@"
+    fi
+  done
+fi
+
 exit 0

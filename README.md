@@ -7,6 +7,7 @@ A shared Maven package that centralizes Eclipse Java formatting and Checkstyle v
 This package includes:
 - `eclipse-formatter.xml`: Eclipse Java formatter configuration (K&R style, 4-space indentation, parameter descriptions on the same line).
 - `checkstyle.xml`: Checkstyle validation rules (requires braces on end of line, indentation verification, etc.).
+- `pre-commit`: A cross-platform Git pre-commit hook that automatically formats files and validates style before commits are completed.
 
 ## Build and Install Locally
 
@@ -20,8 +21,8 @@ mvn clean install
 
 To use these shared formatting rules in another Maven project, configure the following plugins in your project's `pom.xml`:
 
-### 1. Unpack Formatter Configuration (Spotless)
-Since the Spotless plugin requires a physical file path on the disk, use the `maven-dependency-plugin` to unpack `eclipse-formatter.xml` from this JAR into your `target` folder during the `initialize` build phase:
+### 1. Unpack Formatter Configuration and Git Hook
+Since the Spotless plugin requires a physical file path on the disk, and Git requires the hook script in the repository's `.githooks/` directory, use the `maven-dependency-plugin` to unpack both files from this JAR during the `initialize` build phase:
 
 ```xml
 <plugin>
@@ -46,6 +47,15 @@ Since the Spotless plugin requires a physical file path on the disk, use the `ma
                         <includes>eclipse-formatter.xml</includes>
                         <outputDirectory>${project.build.directory}/spotless</outputDirectory>
                     </artifactItem>
+                    <artifactItem>
+                        <groupId>com.example</groupId>
+                        <artifactId>style-config</artifactId>
+                        <version>1.0.0</version>
+                        <type>jar</type>
+                        <overWrite>true</overWrite>
+                        <includes>pre-commit</includes>
+                        <outputDirectory>${project.basedir}/.githooks</outputDirectory>
+                    </artifactItem>
                 </artifactItems>
             </configuration>
         </execution>
@@ -53,7 +63,59 @@ Since the Spotless plugin requires a physical file path on the disk, use the `ma
 </plugin>
 ```
 
-### 2. Configure Spotless Formatter
+*(Note: For nested projects, change the hook `outputDirectory` path to `${project.basedir}/../.githooks`.)*
+
+### 2. Configure Git Hooks and Executable Permissions
+Configure Git to use the `.githooks/` directory and ensure the pre-commit script has executable permissions (critical on Unix/macOS) during build initialization:
+
+```xml
+<plugin>
+    <groupId>org.codehaus.mojo</groupId>
+    <artifactId>exec-maven-plugin</artifactId>
+    <version>3.1.0</version>
+    <executions>
+        <execution>
+            <id>configure-git-hooks</id>
+            <phase>initialize</phase>
+            <goals>
+                <goal>exec</goal>
+            </goals>
+            <configuration>
+                <executable>git</executable>
+                <!-- For nested projects, add: <workingDirectory>${project.basedir}/..</workingDirectory> -->
+                <arguments>
+                    <argument>config</argument>
+                    <argument>core.hooksPath</argument>
+                    <argument>.githooks</argument>
+                </arguments>
+            </configuration>
+        </execution>
+    </executions>
+</plugin>
+
+<plugin>
+    <groupId>org.apache.maven.plugins</groupId>
+    <artifactId>maven-antrun-plugin</artifactId>
+    <version>3.1.0</version>
+    <executions>
+        <execution>
+            <id>make-hook-executable</id>
+            <phase>initialize</phase>
+            <goals>
+                <goal>run</goal>
+            </goals>
+            <configuration>
+                <target>
+                    <chmod file="${project.basedir}/.githooks/pre-commit" perm="ugo+rx"/>
+                    <!-- For nested projects, use: file="${project.basedir}/../.githooks/pre-commit" -->
+                </target>
+            </configuration>
+        </execution>
+    </executions>
+</plugin>
+```
+
+### 3. Configure Spotless Formatter
 Point Spotless to the extracted configuration file:
 
 ```xml
@@ -75,7 +137,7 @@ Point Spotless to the extracted configuration file:
 </plugin>
 ```
 
-### 3. Configure Checkstyle Validation
+### 4. Configure Checkstyle Validation
 Add this artifact as a dependency to the `maven-checkstyle-plugin` so it can load the `checkstyle.xml` rules directly from the classpath:
 
 ```xml
@@ -108,7 +170,7 @@ Add this artifact as a dependency to the `maven-checkstyle-plugin` so it can loa
 </plugin>
 ```
 
-### 4. Configure IDE (VS Code)
+### 5. Configure IDE (VS Code)
 To make VS Code format code exactly like Spotless, update your project's `.vscode/settings.json`:
 
 ```json

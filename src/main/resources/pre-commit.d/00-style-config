@@ -25,4 +25,11 @@ find . -name "pom.xml" -not -path "*/target/*" -not -path "*/style-config/*" | w
   )
 done
 
+# Re-stage any Java files that were modified by spotless
+STAGED_JAVA_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep '\.java$' || true)
+if [ -n "$STAGED_JAVA_FILES" ]; then
+  echo "Re-staging formatted Java files..."
+  echo "$STAGED_JAVA_FILES" | xargs git add
+fi
+
 exit 0

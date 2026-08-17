@@ -1,0 +1,3 @@
+# Force script resources to always use LF line endings
+src/main/resources/pre-commit text eol=lf
+src/main/resources/pre-commit.d/* text eol=lf
